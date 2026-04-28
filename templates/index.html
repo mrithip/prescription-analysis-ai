@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedScan AI | Clinical Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    
+    <style>
+        #analysis-content h3 { font-weight: 700; font-size: 1.25rem; color: #1e3a8a; margin-top: 1.5rem; margin-bottom: 0.75rem; border-left: 4px solid #2563eb; padding-left: 12px; }
+        #analysis-content p { margin-bottom: 1rem; color: #334155; line-height: 1.6; }
+        #analysis-content ul { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 1rem; color: #475569; }
+        #analysis-content li { margin-bottom: 0.5rem; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+
+    <div class="max-w-6xl mx-auto py-12 px-6">
+        <header class="flex justify-between items-center mb-12">
+            <div>
+                <h1 class="text-4xl font-black text-slate-900">MedScan<span class="text-blue-600">AI</span></h1>
+                <p class="text-slate-500 font-medium">Professional Medication Intelligence</p>
+            </div>
+            <button onclick="window.location.reload()" class="bg-white border border-slate-200 px-6 py-3 rounded-2xl shadow-sm hover:bg-slate-50 font-bold text-slate-700">
+                New Analysis
+            </button>
+        </header>
+
+        <div id="drop-zone" class="bg-white border-2 border-dashed border-slate-300 rounded-[2rem] p-24 text-center hover:border-blue-500 hover:bg-blue-50/50 transition-all cursor-pointer shadow-sm">
+            <p class="text-2xl font-bold text-slate-800">Upload Prescription Scan</p>
+            <p class="text-slate-400 mt-2 font-medium text-lg">Click to browse or Drag & Drop</p>
+            <input type="file" id="file-input" class="hidden" accept="image/*">
+        </div>
+
+        <div id="loader" class="hidden mt-20 text-center">
+            <div class="inline-block animate-spin rounded-full h-14 w-14 border-4 border-blue-600 border-t-transparent mb-4"></div>
+            <p class="text-lg font-bold text-slate-700">AI CLINICAL ENGINE ANALYZING...</p>
+        </div>
+
+        <div id="results" class="hidden mt-12 grid grid-cols-1 lg:grid-cols-2 gap-10">
+            <div class="bg-white p-5 rounded-[1.5rem] shadow-sm border border-slate-200">
+                <img id="output-image" class="rounded-xl w-full h-auto" src="" alt="Prescription Image">
+            </div>
+
+            <div class="flex flex-col gap-6">
+                <div id="ui-report-card" class="bg-white p-10 rounded-[1.5rem] shadow-xl border-t-[10px] border-blue-600">
+                    <div id="analysis-content"></div>
+                </div>
+
+                <button id="download-pdf" class="w-full bg-slate-900 text-white py-5 rounded-2xl font-bold hover:bg-black transition-all flex items-center justify-center gap-3 shadow-2xl">
+                    📥 Download Professional PDF Report
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const results = document.getElementById('results');
+        const loader = document.getElementById('loader');
+
+        dropZone.onclick = () => fileInput.click();
+        fileInput.onchange = (e) => handleFile(e.target.files[0]);
+        dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('bg-blue-50', 'border-blue-400'); };
+        dropZone.ondragleave = () => dropZone.classList.remove('bg-blue-50', 'border-blue-400');
+        dropZone.ondrop = (e) => { e.preventDefault(); dropZone.classList.remove('bg-blue-50', 'border-blue-400'); handleFile(e.dataTransfer.files[0]); };
+
+        async function handleFile(file) {
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('file', file);
+
+            loader.classList.remove('hidden');
+            results.classList.add('hidden');
+            dropZone.classList.add('hidden');
+
+            try {
+                const response = await fetch('/analyze', { method: 'POST', body: formData });
+                const data = await response.json();
+                
+                if (data.error) throw new Error(data.error);
+
+                document.getElementById('output-image').src = `data:image/jpeg;base64,${data.image_data}`;
+                document.getElementById('analysis-content').innerHTML = data.analysis_html;
+                results.classList.remove('hidden');
+            } catch (err) {
+                alert("Error: " + err.message);
+                dropZone.classList.remove('hidden');
+            } finally {
+                loader.classList.add('hidden');
+            }
+        }
+
+        document.getElementById('download-pdf').onclick = function() {
+            const analysisHTML = document.getElementById('analysis-content').innerHTML;
+            const dateStr = new Date().toLocaleDateString();
+
+            const pdfContent = `
+                <div style="font-family: Arial, sans-serif; padding: 20px; color: #1a1a1a;">
+                    <div style="border-bottom: 4px solid #1e3a8a; padding-bottom: 15px; margin-bottom: 20px;">
+                        <h1 style="margin: 0 0 5px 0; color: #1e3a8a; font-size: 28px;">Clinical Analysis Report</h1>
+                        <p style="margin: 0; font-size: 12px; color: #64748b;">Report Date: ${dateStr}</p>
+                    </div>
+                    <div style="font-size: 14px; line-height: 1.8; color: #1a1a1a; margin-bottom: 30px;">
+                        ${analysisHTML}
+                    </div>
+                    <div style="margin-top: 40px; border-top: 1px solid #e2e8f0; padding-top: 15px; font-size: 11px; color: #64748b;">
+                        <strong>⚠️ MEDICAL DISCLAIMER:</strong> This report is AI-generated for informational purposes only. Always consult a qualified healthcare professional for medical diagnosis and treatment.
+                    </div>
+                </div>
+            `;
+
+            const element = document.createElement('div');
+            element.innerHTML = pdfContent;
+
+            const opt = {
+                margin: [15, 15, 15, 15],
+                filename: `MedScan_Report_${dateStr.replace(/\//g, '-')}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, logging: false },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(element).save();
+        };
+    </script>
+</body>
+</html>
+
+    <div class="max-w-6xl mx-auto py-12 px-6">
+        <header class="flex justify-between items-center mb-12">
+            <div>
+                <h1 class="text-4xl font-black text-slate-900">MedScan<span class="text-blue-600">AI</span></h1>
+                <p class="text-slate-500 font-medium">Professional Medication Intelligence</p>
+            </div>
+            <button onclick="window.location.reload()" class="bg-white border border-slate-200 px-6 py-3 rounded-2xl shadow-sm hover:bg-slate-50 font-bold text-slate-700">
+                New Analysis
+            </button>
+        </header>
+
+        <div id="drop-zone" class="bg-white border-2 border-dashed border-slate-300 rounded-[2rem] p-24 text-center hover:border-blue-500 hover:bg-blue-50/50 transition-all cursor-pointer shadow-sm">
+            <p class="text-2xl font-bold text-slate-800">Upload Prescription Scan</p>
+            <p class="text-slate-400 mt-2 font-medium text-lg">Click to browse or Drag & Drop</p>
+            <input type="file" id="file-input" class="hidden" accept="image/*">
+        </div>
+
+        <div id="loader" class="hidden mt-20 text-center">
+            <div class="inline-block animate-spin rounded-full h-14 w-14 border-4 border-blue-600 border-t-transparent mb-4"></div>
+            <p class="text-lg font-bold text-slate-700">AI CLINICAL ENGINE ANALYZING...</p>
+        </div>
+
+        <div id="results" class="hidden mt-12 grid grid-cols-1 lg:grid-cols-2 gap-10">
+            <div class="bg-white p-5 rounded-[1.5rem] shadow-sm border border-slate-200">
+                <img id="output-image" class="rounded-xl w-full h-auto" src="" alt="Prescription Image">
+            </div>
+
+            <div class="flex flex-col gap-6">
+                <div id="ui-report-card" class="bg-white p-10 rounded-[1.5rem] shadow-xl border-t-[10px] border-blue-600">
+                    <div id="analysis-content">
+                        </div>
+                </div>
+
+                <button id="download-pdf" class="w-full bg-slate-900 text-white py-5 rounded-2xl font-bold hover:bg-black transition-all flex items-center justify-center gap-3 shadow-2xl">
+                    Download Professional PDF Report
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const results = document.getElementById('results');
+        const loader = document.getElementById('loader');
+
+        dropZone.onclick = () => fileInput.click();
+        fileInput.onchange = (e) => handleFile(e.target.files[0]);
+
+        async function handleFile(file) {
+            if (!file) return;
+            const formData = new FormData();
+            formData.append('file', file);
+            loader.classList.remove('hidden');
+            results.classList.add('hidden');
+            dropZone.classList.add('hidden');
+
+            try {
+                const response = await fetch('/analyze', { method: 'POST', body: formData });
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+
+                document.getElementById('output-image').src = `data:image/jpeg;base64,${data.image_data}`;
+                document.getElementById('analysis-content').innerHTML = data.analysis_html;
+                results.classList.remove('hidden');
+            } catch (err) {
+                alert("Error: " + err.message);
+                dropZone.classList.remove('hidden');
+            } finally {
+                loader.classList.add('hidden');
+            }
+        }
+
+        // --- STABLE PDF GENERATION LOGIC ---
+        document.getElementById('download-pdf').onclick = function() {
+            const content = document.getElementById('analysis-content').innerHTML;
+            const dateStr = new Date().toLocaleDateString();
+
+            // Create a temporary element for the PDF generator
+            const worker = document.createElement('div');
+            worker.style.padding = "40px";
+            worker.style.fontFamily = "Arial, sans-serif";
+            
+            worker.innerHTML = `
+                <div style="border-bottom: 4px solid #1e3a8a; padding-bottom: 10px; margin-bottom: 20px;">
+                    <h1 style="margin:0; color: #1e3a8a;">Clinical Analysis Report</h1>
+                    <p style="margin:0; font-size: 12px; color: #64748b;">Report Date: ${dateStr}</p>
+                </div>
+                <div style="font-size: 14px; line-height: 1.6; color: #1a1a1a;">
+                    ${content}
+                </div>
+                <div style="margin-top: 50px; border-top: 1px solid #e2e8f0; padding-top: 10px; font-size: 10px; color: #94a3b8; font-style: italic;">
+                    MEDICAL DISCLAIMER: This report is AI-generated and for informational purposes only. Consult a doctor for medical diagnosis.
+                </div>
+            `;
+
+            const opt = {
+                margin: 10,
+                filename: 'MedScan_Report.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            // Use html2pdf with the virtual element
+            html2pdf().from(worker).set(opt).save();
+        };
+    </script>
+</body>
+</html>
