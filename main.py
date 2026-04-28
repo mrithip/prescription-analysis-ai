@@ -8,6 +8,7 @@ from io import BytesIO
 
 app = Flask(__name__)
 client = OpenAI(base_url="http://localhost:1234/v1", api_key="lm-studio")
+# client = OpenAI(base_url="http://172.17.0.1:1234/v1", api_key="lm-studio")
 
 def clean_ocr_text(text):
     """Clean and normalize OCR extracted text."""
@@ -64,4 +65,5 @@ def analyze():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
+    # app.run(debug=True,host='0.0.0.0', port=5000)
     app.run(debug=True, port=5000)
