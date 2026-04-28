@@ -60,6 +60,9 @@
         const fileInput = document.getElementById('file-input');
         const results = document.getElementById('results');
         const loader = document.getElementById('loader');
+        let currentAnalysisController = null;
+        let isAnalyzing = false;
+        let currentRequestId = null;
 
         dropZone.onclick = () => fileInput.click();
         fileInput.onchange = (e) => handleFile(e.target.files[0]);
@@ -67,29 +70,100 @@
         dropZone.ondragleave = () => dropZone.classList.remove('bg-blue-50', 'border-blue-400');
         dropZone.ondrop = (e) => { e.preventDefault(); dropZone.classList.remove('bg-blue-50', 'border-blue-400'); handleFile(e.dataTransfer.files[0]); };
 
+        // Cancel any ongoing analysis when clicking "New Analysis"
+        document.querySelector('button[onclick="window.location.reload()"]').onclick = function(e) {
+            e.preventDefault();
+            cancelCurrentAnalysis();
+            resetUI();
+        };
+
+        async function cancelCurrentAnalysis() {
+            if (currentRequestId) {
+                console.log('Cancelling analysis for request:', currentRequestId);
+                try {
+                    await fetch(`/cancel/${currentRequestId}`, { method: 'POST' });
+                } catch (err) {
+                    console.log('Cancel request failed:', err);
+                }
+            }
+            if (currentAnalysisController) {
+                currentAnalysisController.abort();
+            }
+            isAnalyzing = false;
+            currentRequestId = null;
+        }
+
+        function resetUI() {
+            loader.classList.add('hidden');
+            results.classList.add('hidden');
+            dropZone.classList.remove('hidden');
+            document.getElementById('output-image').src = '';
+            document.getElementById('analysis-content').innerHTML = '';
+            isAnalyzing = false;
+            currentRequestId = null;
+        }
+
         async function handleFile(file) {
-            if (!file) return;
+            if (!file || isAnalyzing) return;
+
+            // Cancel any previous analysis
+            await cancelCurrentAnalysis();
+
+            isAnalyzing = true;
+
+            // Show image immediately
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('output-image').src = e.target.result;
+                results.classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+
+            // Start analysis
             const formData = new FormData();
             formData.append('file', file);
 
             loader.classList.remove('hidden');
-            results.classList.add('hidden');
             dropZone.classList.add('hidden');
 
+            // Create new controller for this analysis
+            currentAnalysisController = new AbortController();
+            const signal = currentAnalysisController.signal;
+
             try {
-                const response = await fetch('/analyze', { method: 'POST', body: formData });
+                console.log('Starting analysis...');
+                const response = await fetch('/analyze', { 
+                    method: 'POST', 
+                    body: formData,
+                    signal: signal
+                });
                 const data = await response.json();
                 
-                if (data.error) throw new Error(data.error);
+                if (data.error) {
+                    if (data.error === "Request cancelled") {
+                        console.log('Analysis was cancelled by user');
+                        return;
+                    }
+                    throw new Error(data.error);
+                }
 
+                console.log('Analysis completed for request:', data.request_id);
+                currentRequestId = data.request_id;
+                
+                // Update with processed image and analysis
                 document.getElementById('output-image').src = `data:image/jpeg;base64,${data.image_data}`;
                 document.getElementById('analysis-content').innerHTML = data.analysis_html;
-                results.classList.remove('hidden');
             } catch (err) {
+                if (err.name === 'AbortError') {
+                    console.log('Analysis was cancelled by user');
+                    return;
+                }
+                console.error('Analysis error:', err);
                 alert("Error: " + err.message);
-                dropZone.classList.remove('hidden');
+                resetUI();
             } finally {
                 loader.classList.add('hidden');
+                isAnalyzing = false;
             }
         }
 
