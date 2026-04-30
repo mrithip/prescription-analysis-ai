@@ -21,6 +21,15 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+# Ignore the models folder
+models/
+
+# Ignore uploaded images from Tesseract
+uploads/
+
+# Ignore Python environment folders
+__pycache__/
+venv/
 
 .env
 .venv

@@ -1,14 +1,14 @@
 # MedScan AI - Clinical Prescription Intelligence
 
-**MedScan AI** is a Flask-based web application that uses OCR and AI to analyze prescription images and provide clinical insights. It combines Tesseract OCR with LM Studio's local LLM for medication identification and clinical analysis.
+**MedScan AI** is a Flask-based web application that uses OCR and AI to analyze prescription images and provide clinical insights. It combines Tesseract OCR with a local LLM using llama.cpp for medication identification and clinical analysis.
 
 ## Features
 
-- 📸 **Image Upload**: Drag-and-drop prescription image upload
-- 🔍 **OCR Processing**: Tesseract-based text extraction with contrast enhancement
-- 🤖 **AI Analysis**: Local LLM (LM Studio) for clinical pharmacology insights
-- 📄 **PDF Export**: Generate professional clinical reports
-- 🎨 **Modern UI**: Responsive Tailwind CSS interface
+- **Image Upload**: Drag-and-drop prescription image upload
+- **OCR Processing**: Tesseract-based text extraction with contrast enhancement
+- **AI Analysis**: Local LLM for clinical pharmacology insights
+- **PDF Export**: Generate professional clinical reports
+- **Modern UI**: Responsive Tailwind CSS interface
 
 ## Prerequisites
 
@@ -18,10 +18,6 @@
   sudo apt update
   sudo apt install tesseract-ocr
   ```
-
-- **LM Studio**: Running locally on `http://localhost:1234` with `qwen2.5-coder-3b-instruct` model
-  - [Download LM Studio](https://lmstudio.ai)
-  - Start the local server before running the app
 
 ### Python Version
 - Python 3.8+
@@ -46,21 +42,33 @@
 
 ## Usage
 
-1. **Start LM Studio** with the model running on port 1234
+### Local Development
 
-2. **Run the Flask app**:
+1. **Run the Flask app**:
    ```bash
    python main.py
    ```
 
-3. **Access the web UI**:
+2. **Access the web UI**:
    ```
    http://localhost:5000
    ```
 
-4. **Upload prescription image** and click "Analyze"
+3. **Upload prescription image** and click "Analyze"
 
-5. **Download PDF report** with clinical insights
+4. **Download PDF report** with clinical insights
+
+### Docker Deployment
+
+1. **Build and run with Docker Compose**:
+   ```bash
+   docker-compose up --build
+   ```
+
+2. **Access the web UI**:
+   ```
+   http://localhost:5000
+   ```
 
 ## Project Structure
 
@@ -69,17 +77,18 @@ medicalai/
 ├── main.py                 # Flask app & OCR/AI logic
 ├── templates/
 │   └── index.html         # Web UI with PDF generation
+├── models/
+│   └── Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf or any # Local AI model
 ├── requirements.txt        # Python dependencies
+├── Dockerfile              # Docker container setup
+├── docker-compose.yml      # Docker Compose configuration
 ├── .gitignore             # Git ignore rules
 └── README.md              # This file
 ```
 
 ## Configuration
 
-Edit model name in `main.py`:
-```python
-model="qwen2.5-coder-3b-instruct"  # Change to your LM Studio model
-```
+The AI model is automatically loaded from the `models/` directory. Ensure the GGUF model file is present.
 
 ## API Endpoints
 
@@ -94,7 +103,7 @@ model="qwen2.5-coder-3b-instruct"  # Change to your LM Studio model
 |-------|----------|
 | "No file uploaded" | Ensure file field name is `file` |
 | Tesseract not found | Run `sudo apt install tesseract-ocr` |
-| LM Studio connection error | Verify server running on `http://localhost:1234` |
+| Model not found | Ensure GGUF model file is in `models/` directory |
 | PDF is blank | Ensure analysis HTML renders before downloading |
 | No text detected | Use high-quality prescription images |
 

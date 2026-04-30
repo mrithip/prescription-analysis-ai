@@ -2,15 +2,30 @@ from flask import Flask, render_template, request, jsonify
 import pytesseract
 from PIL import Image, ImageOps, ImageEnhance
 import re
-from openai import OpenAI
+from llama_cpp import Llama
+import glob
+import os
 import base64
 from io import BytesIO
 import uuid
 import threading
-import time
+
 
 app = Flask(__name__)
-client = OpenAI(base_url="http://localhost:1234/v1", api_key="lm-studio")
+
+def find_model_path():
+    model_dir = os.path.join(os.path.dirname(__file__), "models")
+    patterns = ["*.gguf", "*.bin", "*.safetensors", "*.pt", "*.ckpt"]
+    candidates = []
+    for pattern in patterns:
+        candidates.extend(glob.glob(os.path.join(model_dir, pattern)))
+    if not candidates:
+        raise RuntimeError("No model file found in the models/ folder. Place a .gguf or compatible file there.")
+    return candidates[0]
+
+MODEL_PATH = find_model_path()
+print(f"Loading local Llama model from: {MODEL_PATH}")
+llm = Llama(model_path=MODEL_PATH,n_ctx=16384, n_threads=4)
 
 # Global dictionary to track active requests and their cancellation status
 active_requests = {}
@@ -21,6 +36,59 @@ def clean_ocr_text(text):
     text = re.sub(r'\n\s*\n', '\n', text)
     text = re.sub(r'[ \t]+', ' ', text)
     return "\n".join([line.strip() for line in text.split('\n') if len(line.strip()) > 3])
+
+
+def dedupe_response(text):
+    """Remove exact repeated blocks from the generated response."""
+    if not text:
+        return text
+    cleaned = text.strip()
+    for repeat_count in range(2, 5):
+        if len(cleaned) % repeat_count != 0:
+            continue
+        part_len = len(cleaned) // repeat_count
+        part = cleaned[:part_len]
+        if part * repeat_count == cleaned:
+            return part.strip()
+    return text
+
+
+def sanitize_response(text):
+    """Clean noise from the model response and normalize punctuation."""
+    if not text:
+        return text
+
+    text = text.strip()
+
+    # Remove exact repeated consecutive lines
+    lines = [line.rstrip() for line in text.splitlines()]
+    normalized_lines = []
+    previous_line = None
+    for line in lines:
+        if line == previous_line:
+            continue
+        normalized_lines.append(line)
+        previous_line = line
+    text = "\n".join(normalized_lines).strip()
+
+    # Collapse repeated punctuation like ,,,,, or .....
+    text = re.sub(r'([.,:;!?])\1{2,}', r'\1', text)
+    text = re.sub(r'[-]{3,}', '-', text)
+    text = re.sub(r'[`]{2,}', '', text)
+
+    # Remove markdown/code fences and stray question marks/slashes
+    text = re.sub(r'(^|\n)\s*```[\s\S]*?```', '', text)
+    text = re.sub(r'(^|\n)\s*~~~[\s\S]*?~~~', '', text)
+
+    # Remove stray leading/trailing punctuation and line noise
+    text = re.sub(r'^[\s\.,;:!\-─–—`]+', '', text)
+    text = re.sub(r'[\s\.,;:!\-─–—`]+$', '', text)
+
+    # Strip extra blank lines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+
+    return text
+
 
 def is_request_cancelled(request_id):
     """Check if a request has been cancelled."""
@@ -52,36 +120,23 @@ def run_ai_analysis(request_id, prompt):
             print(f"Request {request_id} cancelled before AI call")
             return None
             
-        response = client.chat.completions.create(
-            model="qwen2.5-coder-3b-instruct",
-            messages=[{"role": "user", "content": prompt}],
+        response = llm.create_completion(
+            prompt=prompt,
+            max_tokens=1024,
             temperature=0.1,
-            stream=True,
-            timeout=30.0  # Shorter timeout for more responsive cancellation
+            top_p=0.95,
+            repeat_penalty=1.1,
+            echo=False,
+            stop=["</s>"]
         )
-        
-        full_response = ""
-        chunk_count = 0
-        
-        for chunk in response:
-            chunk_count += 1
-            
-            # Check for cancellation frequently
-            if chunk_count % 3 == 0:  # Check every 3 chunks
-                if is_request_cancelled(request_id) or getattr(threading.current_thread(), 'should_stop', False):
-                    print(f"Request {request_id} cancelled during streaming at chunk {chunk_count}")
-                    return None
-            
-            if chunk.choices[0].delta.content:
-                full_response += chunk.choices[0].delta.content
-                
-        print(f"AI generation completed for request {request_id}, total chunks: {chunk_count}")
+
+        full_response = response['choices'][0]['text']
+        full_response = dedupe_response(full_response)
+        full_response = sanitize_response(full_response)
+        print(f"AI generation completed for request {request_id}")
         return full_response
         
     except Exception as e:
-        if "cancelled" in str(e).lower() or "timeout" in str(e).lower():
-            print(f"Request {request_id} cancelled due to: {e}")
-            return None
         print(f"AI generation error for request {request_id}: {e}")
         raise e
 
@@ -129,8 +184,13 @@ def analyze():
             return jsonify({"error": "Request cancelled"}), 499
 
         prompt = (
-            "<s>[INST] You are a Clinical Pharmacologist. Analyze this prescription. "
-            "Use HTML tags (<h3>, <p>, <ul>, <li>) for your response. "
+            "<s>[INST] You are a Clinical Pharmacologist. Analyze this prescription only once. "
+            "Respond in HTML only, with no Markdown, no code fences, and no backticks. "
+            "Use only <h3>, <p>, <ul>, and <li> tags. "
+            "Return exactly one section for each requested heading. "
+            "Do not repeat or duplicate any part of the output. "
+            "Do not include the original prescription text or any extra preamble. "
+            "Begin directly with the first heading. "
             "1. List Medications in <h3>. "
             "2. Explain Clinical Indications in <h3>. "
             "3. Describe the overall Patient Case in <h3>. "
