@@ -1,17 +1,9 @@
-version: '3.8'
-
 services:
   medscan-ai:
     build: .
     ports:
       - "5000:5000"
-    environment:
-      - FLASK_ENV=production
-      - FLASK_APP=main.py
-    volumes:
-      - ./templates:/app/templates
-      - ./main.py:/app/main.py
-      - ./models:/app/models
+    # Remove the volumes line for /app/models to use the baked version
     networks:
       - medscan-network
 
