@@ -24,12 +24,9 @@ build/
 *.egg-info/
 node_modules/
 
-# Ignore test fixture files
-tests/fixtures/
-
-# Ignore test reports
-reports/
-*.html
+# Ignore test requirement files (not needed in production image)
+requirements-test.txt
+requirements.txt
 
 # Ignore .gguf files if they exist locally
 models/*.gguf

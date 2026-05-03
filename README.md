@@ -1,5 +1,7 @@
 # MedScan AI - Clinical Prescription Intelligence
 
+[![Playwright E2E Tests](https://github.com/mrithip/prescription-analysis-ai/actions/workflows/test.yml/badge.svg)](https://github.com/mrithip/prescription-analysis-ai/actions/workflows/test.yml)
+
 **MedScan AI** is a Flask-based web application that uses OCR and AI to analyze prescription images and provide clinical insights. It combines Tesseract OCR with a local LLM using llama.cpp for medication identification and clinical analysis.
 
 ## Features
@@ -43,6 +45,8 @@
    pip install -r requirements.txt
    ```
 
+   **Note**: For production Docker builds, use `requirements-docker.txt`. For testing, use `requirements-test.txt`.
+
 ## Usage
 
 ### Local Development
@@ -84,7 +88,7 @@
 
 ```bash
 # Install test dependencies
-pip install -r requirements.txt
+pip install -r requirements-test.txt
 python3 -m playwright install chromium
 
 # Generate fixture image
@@ -171,7 +175,9 @@ Workflow: [.github/workflows/test.yml](.github/workflows/test.yml)
 ```
 medicalai/
 ├── main.py                 # Flask app & OCR/AI logic
-├── requirements.txt        # Python dependencies
+├── requirements.txt        # Full dependencies (local dev)
+├── requirements-docker.txt # Production dependencies only
+├── requirements-test.txt   # Testing dependencies
 ├── Dockerfile              # Docker container setup
 ├── docker-compose.yml      # Docker Compose configuration
 ├── .gitignore              # Git ignore rules
@@ -227,13 +233,21 @@ The AI model is automatically loaded from the `models/` directory:
 
 ## Dependencies
 
-Key packages:
+**Production** (requirements-docker.txt):
 - **Flask** - Web framework
 - **pytesseract** - OCR interface
 - **Pillow** - Image processing
 - **llama-cpp-python** - Local LLM inference
-- **Playwright** - E2E testing
+
+**Testing** (requirements-test.txt):
+- All production dependencies
 - **pytest** - Test runner
+- **playwright** - E2E testing
+- **pytest-playwright** - Playwright pytest integration
+- **pytest-html** - HTML test reports
+
+**Development** (requirements.txt):
+- All production and testing dependencies
 
 See [requirements.txt](requirements.txt) for full list.
 
