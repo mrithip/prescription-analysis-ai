@@ -21,36 +21,53 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-# Ignore the models folder
-models/
 
-# Ignore uploaded images from Tesseract
+# Ignore GGUF model files (large AI models)
+models/*.gguf
+models/*.bin
+models/*.safetensors
+models/*.pt
+models/*.ckpt
+models
+# Ignore uploaded images from Tesseract/OCR
 uploads/
 
 # Ignore Python environment folders
-__pycache__/
-venv/
-
-.env
 .venv
 venv/
 ENV/
 env/
+.env
+
+# Ignore IDE and editor
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-instance/
+# Ignore test and coverage files
 .pytest_cache/
 .coverage
 htmlcov/
+reports/
+*.xml
 
+# OS files
 .DS_Store
 *.log
 *.pot
 
+# Node modules (if using frontend tooling)
 node_modules/
 package-lock.json
 yarn.lock
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Playwright downloads
+.auth/
+.browsers/

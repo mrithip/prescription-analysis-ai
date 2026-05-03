@@ -23,3 +23,26 @@ dist/
 build/
 *.egg-info/
 node_modules/
+
+# Ignore test fixture files
+tests/fixtures/
+
+# Ignore test reports
+reports/
+*.html
+
+# Ignore .gguf files if they exist locally
+models/*.gguf
+
+# Ignore CI/CD workflows
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Ignore documentation files
+TESTING.md
+README.md
+LICENSE
+
+# Ignore development scripts
+scripts/

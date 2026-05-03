@@ -1,0 +1,65 @@
+name: Playwright E2E Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      PYTHON_VERSION: '3.11'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Build Docker image
+        run: |
+          docker build -t medscanai-ci .
+
+      - name: Start Docker container
+        run: |
+          docker run -d --name medscanai-ci -p 5000:5000 -e TEST_MODE=true medscanai-ci
+
+      - name: Wait for app to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sSf http://127.0.0.1:5000/ > /dev/null; then
+              echo "App ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "App did not become ready in time"
+          exit 1
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python -m playwright install chromium
+
+      - name: Run Playwright tests
+        run: |
+          mkdir -p reports
+          pytest tests/test_app.py --html=reports/test-report.html
+
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-report
+          path: reports/test-report.html
+
+      - name: Stop Docker container
+        if: always()
+        run: |
+          docker stop medscanai-ci || true
+          docker rm medscanai-ci || true

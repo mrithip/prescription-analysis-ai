@@ -10,6 +10,7 @@ from io import BytesIO
 import uuid
 import threading
 
+TEST_MODE = os.getenv('TEST_MODE', 'false').lower() == 'true'
 
 app = Flask(__name__)
 
@@ -23,9 +24,16 @@ def find_model_path():
         raise RuntimeError("No model file found in the models/ folder. Place a .gguf or compatible file there.")
     return candidates[0]
 
-MODEL_PATH = find_model_path()
-print(f"Loading local Llama model from: {MODEL_PATH}")
-llm = Llama(model_path=MODEL_PATH,n_ctx=16384, n_threads=4)
+def load_model():
+    if TEST_MODE:
+        print("TEST_MODE=true detected - skipping model load")
+        return None
+
+    model_path = find_model_path()
+    print(f"Loading local Llama model from: {model_path}")
+    return Llama(model_path=model_path, n_ctx=16384, n_threads=4)
+
+llm = load_model()
 
 # Global dictionary to track active requests and their cancellation status
 active_requests = {}
@@ -90,6 +98,18 @@ def sanitize_response(text):
     return text
 
 
+def get_mock_analysis():
+    return (
+        "<h3>Medications</h3>"
+        "<p>Mocked Clinical Analysis: this is a fixed test response.</p>"
+        "<h3>Clinical Indications</h3>"
+        "<p>Mocked Clinical Analysis provides a sample overview.</p>"
+        "<h3>Patient Case</h3>"
+        "<p>Example patient case description generated during TEST_MODE.</p>"
+        "<footer>Mocked Clinical Analysis - test mode only.</footer>"
+    )
+
+
 def is_request_cancelled(request_id):
     """Check if a request has been cancelled."""
     with requests_lock:
@@ -114,6 +134,10 @@ def run_ai_analysis(request_id, prompt):
     
     try:
         print(f"Starting AI generation for request {request_id} in thread {threading.current_thread().name}")
+
+        if TEST_MODE:
+            print(f"TEST_MODE active - returning mock AI output for request {request_id}")
+            return get_mock_analysis()
         
         # Check for cancellation before starting
         if is_request_cancelled(request_id) or getattr(threading.current_thread(), 'should_stop', False):
@@ -171,13 +195,16 @@ def analyze():
         img.save(buffered, format="JPEG")
         img_str = base64.b64encode(buffered.getvalue()).decode()
 
-        ocr_img = ImageOps.grayscale(img)
-        ocr_img = ImageEnhance.Contrast(ocr_img).enhance(2.5)
-        raw_text = pytesseract.image_to_string(ocr_img)
-        cleaned_text = clean_ocr_text(raw_text)
+        if TEST_MODE:
+            cleaned_text = "TEST PRESCRIPTION"
+        else:
+            ocr_img = ImageOps.grayscale(img)
+            ocr_img = ImageEnhance.Contrast(ocr_img).enhance(2.5)
+            raw_text = pytesseract.image_to_string(ocr_img)
+            cleaned_text = clean_ocr_text(raw_text)
 
-        if not cleaned_text:
-            return jsonify({"error": "No text detected"}), 400
+            if not cleaned_text:
+                return jsonify({"error": "No text detected"}), 400
 
         # Check if cancelled before starting AI processing
         if is_request_cancelled(request_id):
@@ -254,5 +281,5 @@ def analyze():
             active_requests.pop(request_id, None)
 
 if __name__ == '__main__':
-    # app.run(debug=True,host='0.0.0.0', port=5000)
-    app.run(debug=True, port=5000)
+    app.run(debug=True,host='0.0.0.0', port=5000)
+    # app.run(debug=True, port=5000)
