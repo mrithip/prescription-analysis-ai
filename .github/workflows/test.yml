@@ -21,6 +21,12 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      # FIX: Create the missing directory and a dummy file so Docker build succeeds
+      - name: Create dummy models directory
+        run: |
+          mkdir -p models
+          touch models/dummy.gguf
+
       - name: Build Docker image
         run: |
           docker build -t medscanai-ci .
@@ -36,24 +42,37 @@ jobs:
               echo "App ready"
               exit 0
             fi
+            echo "Waiting for app..."
             sleep 2
           done
           echo "App did not become ready in time"
+          docker logs medscanai-ci
           exit 1
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          python -m playwright install chromium
+          # Install playwright-specific dependencies for reporting
+          pip install pytest-html pytest-playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Create fixtures for test
+        run: |
+          mkdir -p tests/fixtures
+          # Create a tiny valid-looking image for Tesseract to process
+          sudo apt-get install -y imagemagick
+          convert -size 300x300 xc:white -pointsize 20 -fill black -draw "text 20,150 'Prescription: Amoxicillin'" tests/fixtures/rx.jpg
 
       - name: Run Playwright tests
         run: |
           mkdir -p reports
-          pytest tests/test_app.py --html=reports/test-report.html
+          # Use -p no:launch_testing if you still have ROS interference
+          pytest tests/test_app.py --html=reports/test-report.html --self-contained-html
 
       - name: Upload test report
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: playwright-test-report
           path: reports/test-report.html
