@@ -1,4 +1,4 @@
-# MedScan AI - Clinical Prescription Intelligence
+# MedScan AI - Clinical Prescription Intelligence...
 
 [![Playwright E2E Tests](https://github.com/mrithip/prescription-analysis-ai/actions/workflows/test.yml/badge.svg)](https://github.com/mrithip/prescription-analysis-ai/actions/workflows/test.yml)
 
